@@ -1,0 +1,79 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /rooms/{code} {
+      function signedIn() { return request.auth != null; }
+      function roomData() { return get(/databases/$(database)/documents/rooms/$(code)).data; }
+      function isTeacher() { return signedIn() && roomData().teacherUid == request.auth.uid; }
+      function isOpen() { return signedIn() && roomData().expiresAt > request.time.toMillis(); }
+      function mine(d) { return d.authorUid == request.auth.uid; }
+
+      // Existing classroom permissions are preserved.
+      allow get: if signedIn();
+      allow create: if signedIn() && request.resource.data.teacherUid == request.auth.uid;
+      allow update: if signedIn()
+        && resource.data.teacherUid == request.auth.uid
+        && request.resource.data.teacherUid == resource.data.teacherUid
+        && request.resource.data.expiresAt == resource.data.expiresAt
+        && resource.data.expiresAt > request.time.toMillis();
+
+      // One document per normalized nickname. Only the teacher can list everyone.
+      match /members/{nickname} {
+        function validMember() {
+          let d = request.resource.data;
+          return d.keys().hasAll(['name','uid','sessionId','updatedAt'])
+            && d.keys().hasOnly(['name','uid','sessionId','updatedAt'])
+            && d.uid == request.auth.uid
+            && d.name is string && d.name.size() > 0 && d.name.size() <= 10
+            && (d.name != '선생님' || isTeacher())
+            && d.sessionId is string && d.sessionId.size() == 32
+            && d.updatedAt == request.time;
+        }
+        allow get: if signedIn();
+        allow list: if isTeacher();
+        allow create: if isOpen() && validMember();
+        allow update: if isOpen() && validMember()
+          && request.resource.data.name == resource.data.name
+          && ((resource.data.uid == request.auth.uid
+              && request.resource.data.sessionId == resource.data.sessionId)
+            || resource.data.updatedAt + duration.value(90, 's') <= request.time);
+        allow delete: if signedIn() && resource.data.uid == request.auth.uid;
+      }
+
+      match /posts/{id} {
+        allow read: if signedIn();
+        allow create: if isOpen() && mine(request.resource.data)
+          && request.resource.data.keys().hasOnly(['title','body','nick','authorUid','createdAt','updatedAt'])
+          && request.resource.data.title is string && request.resource.data.title.size() <= 40
+          && request.resource.data.body is string && request.resource.data.body.size() <= 1500
+          && request.resource.data.nick is string && request.resource.data.nick.size() <= 20;
+        allow update: if isOpen() && mine(resource.data)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['title','body','updatedAt'])
+          && request.resource.data.title.size() <= 40
+          && request.resource.data.body.size() <= 1500;
+        allow delete: if isTeacher();
+      }
+
+      match /comments/{id} {
+        allow read: if signedIn();
+        allow create: if isOpen() && mine(request.resource.data)
+          && request.resource.data.keys().hasOnly(['postId','nick','text','authorUid','createdAt','likes'])
+          && request.resource.data.text is string && request.resource.data.text.size() > 0 && request.resource.data.text.size() <= 80
+          && request.resource.data.likes.size() == 0;
+        allow update: if isOpen()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes'])
+          && request.resource.data.likes.toSet().difference(resource.data.likes.toSet()).hasOnly([request.auth.uid])
+          && resource.data.likes.toSet().difference(request.resource.data.likes.toSet()).hasOnly([request.auth.uid]);
+        allow delete: if isTeacher();
+      }
+
+      match /words/{id} {
+        allow read: if signedIn();
+        allow create: if isOpen() && mine(request.resource.data)
+          && request.resource.data.keys().hasOnly(['postId','nick','text','authorUid','createdAt'])
+          && request.resource.data.text is string && request.resource.data.text.size() > 0 && request.resource.data.text.size() <= 80;
+        allow delete: if isTeacher();
+      }
+    }
+  }
+}

@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>생각 나눔 보드</title>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<style>
+:root{--p:#f8c4d3;--pd:#e58aa6;--pl:#fff1f5;--bg:#fffbfc;--tx:#3b3238;--mu:#8f7f87;--bd:#f2dfe5}
+*{box-sizing:border-box}
+body{margin:0;font-family:"Pretendard","Apple SD Gothic Neo","Malgun Gothic",sans-serif;background:var(--bg);color:var(--tx);line-height:1.6}
+body.lock{overflow:hidden}
+button,input,textarea,select{font:inherit;color:inherit}
+button{cursor:pointer}
+.hide{display:none!important}
+.btn{background:var(--pd);color:#fff;border:0;border-radius:10px;padding:9px 16px;font-weight:700}
+.btn.soft{background:var(--p);color:#6b3045}
+.btn.line{background:#fff;color:var(--tx);border:1px solid var(--bd)}
+.btn:focus-visible,.lk:focus-visible,input:focus-visible,textarea:focus-visible{outline:3px solid var(--p);outline-offset:1px}
+input,textarea,select{width:100%;border:1px solid var(--bd);border-radius:10px;padding:10px 12px;background:#fff}
+label{display:block;font-weight:700;margin:12px 0 4px;font-size:14px}
+.lk{background:none;border:0;color:var(--pd);font-weight:700;padding:0}
+/* 첫 화면 */
+#landing{max-width:760px;margin:0 auto;padding:60px 20px;text-align:center}
+#landing h1{font-size:44px;margin:0 0 6px;letter-spacing:-1px}
+#landing p.sub{color:var(--mu);margin:0 0 36px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:16px;text-align:left}
+.panel{background:#fff;border:1px solid var(--bd);border-radius:18px;padding:24px}
+.panel h2{margin:0 0 4px;font-size:20px}
+.panel .btn{width:100%;margin-top:16px}
+#setup{background:var(--pl);border:1px dashed var(--pd);border-radius:12px;padding:12px;margin-bottom:20px;text-align:left;font-size:14px}
+/* 교실 */
+header{display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:12px 20px;background:var(--pl);border-bottom:2px solid var(--p);position:sticky;top:0;z-index:5}
+header h1{font-size:20px;margin:0;margin-right:auto}
+.chip{background:#fff;border:1px solid var(--p);border-radius:99px;padding:3px 12px;font-size:14px}
+#tbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:10px 20px;border-bottom:1px solid var(--bd);background:#fff}
+#tbar select,#tbar input{width:auto}
+#board{padding:20px;columns:280px;column-gap:16px}
+.card{break-inside:avoid;background:#fff;border:1px solid var(--bd);border-top:5px solid var(--p);border-radius:14px;padding:14px;margin-bottom:16px}
+.card h3{margin:0 0 6px;font-size:17px}
+.card p{margin:0 0 6px;white-space:pre-wrap;word-break:break-word}
+.card p.clamp{display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}
+.card footer{display:flex;gap:10px;align-items:center;color:var(--mu);font-size:14px;margin-top:6px}
+.card footer span{margin-right:auto}
+.empty{color:var(--mu);text-align:center;padding:60px 0;column-span:all}
+#fab{position:fixed;right:22px;bottom:22px;border-radius:99px;padding:14px 22px;box-shadow:0 6px 18px #e58aa655;z-index:6}
+/* 발표 */
+#present{display:grid;grid-template-columns:1fr 380px;gap:16px;padding:16px 20px;height:calc(100vh - 62px)}
+#present.t{grid-template-columns:200px 1fr 380px;height:calc(100vh - 118px)}
+#present>div{background:#fff;border:1px solid var(--bd);border-radius:16px;padding:16px;overflow:auto;min-height:0}
+#pList .pick{display:block;width:100%;text-align:left;background:var(--bg);border:1px solid var(--bd);border-radius:10px;padding:8px 10px;margin-bottom:8px}
+#pList .pick.on{background:var(--p);border-color:var(--pd)}
+#pList small{display:block;color:var(--mu)}
+#pPost h2{margin:0 0 8px}
+#pPost p{white-space:pre-wrap;font-size:18px;word-break:break-word}
+#pSide{display:flex;flex-direction:column}
+#cq{font-weight:700;background:var(--pl);border-radius:10px;padding:8px 12px;margin-bottom:10px}
+#cList{flex:1;overflow:auto;display:flex;flex-direction:column;gap:8px;margin-bottom:10px}
+.cm{background:var(--bg);border:1px solid var(--bd);border-radius:12px;padding:8px 12px}
+.cm b{font-size:14px}
+.cm .lkbtn{border:1px solid var(--bd);background:#fff;border-radius:99px;padding:1px 10px;font-size:13px;margin-top:4px}
+.cm .lkbtn.on{background:var(--p);border-color:var(--pd)}
+#cloud{flex:1;overflow:auto;display:flex;flex-wrap:wrap;gap:8px 14px;align-content:flex-start;align-items:center;padding:8px}
+.w{font-weight:800;line-height:1.2}
+.row{display:flex;gap:8px}
+.row .btn{white-space:nowrap}
+/* 작성창 */
+#modal{position:fixed;inset:0;background:#3b323866;display:flex;align-items:center;justify-content:center;z-index:20;padding:16px}
+#modal>div{background:#fff;border-radius:18px;padding:22px;width:100%;max-width:520px;max-height:92vh;overflow:auto}
+@media(max-width:820px){.two{grid-template-columns:1fr}#present,#present.t{grid-template-columns:1fr;height:auto}body.lock{overflow:auto}}
+</style>
+</head>
+<body>
+
+<section id="landing">
+  <h1>💭 생각 나눔 보드</h1>
+  <p class="sub">내 생각을 쓰고, 친구들의 생각을 읽어요</p>
+  <div id="setup" class="hide"><b>Firebase 설정이 필요해요.</b> 파일 위쪽 <code>firebaseConfig</code>에 본인의 값을 넣어주세요.</div>
+  <div class="two">
+    <div class="panel">
+      <h2>학생 입장</h2>
+      <label for="jc">학급 코드 (5자리 숫자)</label>
+      <input id="jc" inputmode="numeric" maxlength="5" placeholder="12345">
+      <label for="jn">내 이름</label>
+      <input id="jn" maxlength="10" placeholder="이름 또는 닉네임">
+      <button class="btn" id="joinBtn">들어가기</button>
+    </div>
+    <div class="panel">
+      <h2>교사</h2>
+      <p style="color:var(--mu);margin:4px 0 0">새 교실을 열면 5자리 학급 코드가 만들어져요. 코드와 교실은 24시간 동안 유지돼요.</p>
+      <button class="btn soft" id="createBtn">교실 개설하기</button>
+    </div>
+  </div>
+</section>
+
+<section id="room" class="hide">
+  <header>
+    <h1>💭 생각 나눔 보드</h1>
+    <span class="chip">학급 코드 <b id="hCode"></b></span>
+    <span class="chip" id="hName"></span>
+    <button class="btn line" id="leaveBtn">나가기</button>
+  </header>
+  <div id="tbar" class="hide">
+    <button class="btn" id="modeBtn"></button>
+    <span id="tOpts" class="row hide" style="align-items:center">
+      <select id="cmode" aria-label="댓글 방식"><option value="sns">댓글 + 공감</option><option value="word">짧은 단어 모으기</option></select>
+      <input id="qInput" placeholder="학생들에게 물어볼 질문 (예: 이 글을 읽고 드는 감정은?)" style="width:340px;max-width:100%">
+    </span>
+  </div>
+  <main id="board"></main>
+  <div id="present" class="hide">
+    <div id="pList" class="hide"></div>
+    <div id="pPost"></div>
+    <div id="pSide">
+      <div id="cq" class="hide"></div>
+      <div id="cList"></div>
+      <div id="cloud" class="hide"></div>
+      <div class="row">
+        <input id="cInput" maxlength="80" placeholder="댓글을 입력하세요">
+        <button class="btn" id="cSend">올리기</button>
+      </div>
+    </div>
+  </div>
+  <button class="btn" id="fab">✏️ 글쓰기</button>
+</section>
+
+<div id="modal" class="hide">
+  <div>
+    <h2 id="mTitle" style="margin:0 0 4px">글쓰기</h2>
+    <label for="eT">제목</label><input id="eT" maxlength="40">
+    <label for="eB">내용</label><textarea id="eB" rows="6" maxlength="1500"></textarea>
+    <p style="color:var(--mu);margin:12px 0 0;font-size:14px">작성자: <b id="eN"></b></p>
+    <div class="row" style="margin-top:14px;justify-content:flex-end">
+      <button class="btn line" id="mCancel">취소</button>
+      <button class="btn" id="mSave">올리기</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ▼▼ Firebase 콘솔 > 프로젝트 설정 > 내 앱 에서 복사한 값으로 바꿔주세요 ▼▼ */
+const firebaseConfig = {
+  apiKey: "AIzaSyC16A4xDDJw84p2i38IJkATx_JeG2mIxuw",
+  authDomain: "think-board-42bf6.firebaseapp.com",
+  projectId: "think-board-42bf6",
+  storageBucket: "think-board-42bf6.firebasestorage.app",
+  messagingSenderId: "1016639275674",
+  appId: "1:1016639275674:web:3aa301c6a284967ed8d523"
+};/* ▲▲ ------------------------------------------------------ ▲▲ */
+
+const ok = firebaseConfig.apiKey !== "YOUR_API_KEY";
+let db, auth, uid = null, authReady = Promise.resolve();
+if (ok) {
+  firebase.initializeApp(firebaseConfig); db = firebase.firestore(); auth = firebase.auth();
+  // 학생에게 보이지 않는 익명 로그인 (같은 브라우저에서는 새로고침해도 같은 ID가 유지됨)
+  authReady = new Promise((res, rej) => auth.onAuthStateChanged(u => { if (u) { uid = u.uid; res(); } else auth.signInAnonymously().catch(rej); }));
+  authReady.catch(() => { const b = document.getElementById('setup'); b.innerHTML = '<b>익명 로그인을 켜 주세요.</b> Firebase 콘솔 > Authentication > Sign-in method > 익명 사용 설정'; b.classList.remove('hide'); });
+}
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+if (!ok) $('#setup').classList.remove('hide');
+
+let S = JSON.parse(localStorage.getItem('tb') || 'null');
+let room = {}, posts = [], comments = [], words = [], unsubs = [];
+let expanded = new Set(), editingId = null;
+let dyn = [], dynKey = '';   // 발표 중인 글의 댓글/응답 구독
+const isT = () => !!uid && room.teacherUid === uid;      // 교사 = 교실을 만든 브라우저
+const myName = () => isT() ? '선생님' : S.name;
+const roomRef = () => db.collection('rooms').doc(S.code);
+
+/* ---------- 입장 / 개설 ---------- */
+$('#createBtn').onclick = async () => {
+  if (!ok) return alert('먼저 Firebase 설정을 해주세요.');
+  await authReady;
+  for (let i = 0; i < 30; i++) {
+    const code = String(Math.floor(10000 + Math.random() * 90000));
+    const ref = db.collection('rooms').doc(code);
+    if ((await ref.get()).exists) continue;
+    const now = Date.now();
+    await ref.set({createdAt: now, expiresAt: now + 864e5, mode: 'board', presentId: '', cmode: 'sns', question: '', teacherUid: uid});
+    return enter({code, name: '선생님'});
+  }
+  alert('학급 코드를 만들지 못했어요. 다시 눌러 주세요.');
+};
+$('#joinBtn').onclick = async () => {
+  if (!ok) return alert('먼저 Firebase 설정을 해주세요.');
+  await authReady;
+  const code = $('#jc').value.trim(), name = $('#jn').value.trim();
+  if (!/^\d{5}$/.test(code)) return alert('학급 코드는 5자리 숫자예요.');
+  if (!name) return alert('이름을 입력해 주세요.');
+  const snap = await db.collection('rooms').doc(code).get();
+  if (!snap.exists || snap.data().expiresAt < Date.now()) return alert('없거나 종료된 학급 코드예요. 코드를 다시 확인해 주세요.');
+  enter({code, name});
+};
+$('#leaveBtn').onclick = () => leave();
+function enter(s) { S = s; localStorage.setItem('tb', JSON.stringify(s)); start(); }
+function leave(msg) {
+  unsubs.forEach(u => u()); unsubs = [];
+  dyn.forEach(u => u()); dyn = []; dynKey = ''; localStorage.removeItem('tb'); S = null;
+  room = {}; posts = []; comments = []; words = [];
+  document.body.classList.remove('lock');
+  $('#room').classList.add('hide'); $('#landing').classList.remove('hide');
+  if (msg) alert(msg);
+}
+function start() {
+  $('#landing').classList.add('hide'); $('#room').classList.remove('hide');
+  $('#hCode').textContent = S.code;
+  const r = roomRef();
+  unsubs = [
+    r.onSnapshot(d => {
+      if (!d.exists || d.data().expiresAt < Date.now()) return leave('학급이 종료되었어요. (24시간 경과)');
+      room = d.data(); syncSubs(); render();
+    }),
+    // 게시판: 글만 실시간 구독
+    r.collection('posts').onSnapshot(q => { posts = q.docs.map(d => ({id: d.id, ...d.data()})); render(); })
+  ];
+}
+// 발표 모드에서 "현재 선택된 글"의 댓글(또는 단어 응답)만 구독. 글이 바뀌거나 발표가 끝나면 해제.
+function syncSubs() {
+  const key = room.mode === 'present' && room.presentId ? room.presentId + '|' + room.cmode : '';
+  if (key === dynKey) return;
+  dyn.forEach(u => u()); dyn = []; dynKey = key; comments = []; words = [];
+  if (!key) return;
+  const word = room.cmode === 'word';
+  const q = roomRef().collection(word ? 'words' : 'comments').where('postId', '==', room.presentId);
+  dyn = [q.onSnapshot(snap => {
+    const arr = snap.docs.map(d => ({id: d.id, ...d.data()}));
+    if (word) words = arr; else comments = arr;
+    render();
+  })];
+}
+setInterval(() => { if (S && room.expiresAt && room.expiresAt < Date.now()) leave('학급이 종료되었어요. (24시간 경과)'); }, 60000);
+
+/* ---------- 화면 그리기 ---------- */
+function render() {
+  if (!S || !room.createdAt) return;
+  const pm = room.mode === 'present';
+  $('#hName').textContent = (isT() ? '👩‍🏫 ' : '🙂 ') + myName();
+  $('#tbar').classList.toggle('hide', !isT());
+  const list = posts.filter(p => p.createdAt >= room.createdAt).sort((a, b) => b.createdAt - a.createdAt);
+  document.body.classList.toggle('lock', pm && !isT());
+  $('#board').classList.toggle('hide', pm);
+  $('#present').classList.toggle('hide', !pm);
+  $('#present').classList.toggle('t', isT());
+  $('#fab').classList.toggle('hide', pm);
+  if (pm) $('#modal').classList.add('hide');
+  if (isT()) {
+    $('#modeBtn').textContent = pm ? '발표 시간 끝내기' : '▶ 발표 시간 시작';
+    $('#tOpts').classList.toggle('hide', !pm);
+    $('#cmode').value = room.cmode;
+    if (document.activeElement !== $('#qInput')) $('#qInput').value = room.question || '';
+    $('#tOpts').style.display = pm ? 'flex' : 'none';
+  }
+  if (!pm) {
+    $('#board').innerHTML = list.length ? list.map(cardHtml).join('') : '<div class="empty">아직 글이 없어요. 첫 번째 생각을 남겨 보세요!</div>';
+  } else renderPresent(list);
+}
+function cardHtml(p) {
+  const mine = p.authorUid === uid;
+  const long = p.body.length > 120 || p.body.split('\n').length > 4, ex = expanded.has(p.id);
+  return `<article class="card"><h3>${esc(p.title)}</h3>
+  <p class="${long && !ex ? 'clamp' : ''}">${esc(p.body)}</p>
+  ${long ? `<button class="lk" data-more="${p.id}">${ex ? '접기' : '더보기'}</button>` : ''}
+  <footer><span>✏️ ${esc(p.nick)}${p.updatedAt > p.createdAt ? ' (수정됨)' : ''}</span>
+  ${mine ? `<button class="lk" data-edit="${p.id}">수정</button>` : ''}
+  ${isT() ? `<button class="lk" data-del="${p.id}" style="color:var(--mu)">삭제</button>` : ''}</footer></article>`;
+}
+function renderPresent(list) {
+  const cur = posts.find(p => p.id === room.presentId);
+  if (isT()) {
+    $('#pList').classList.remove('hide');
+    $('#pList').innerHTML = list.map(p => `<button class="pick ${p.id === room.presentId ? 'on' : ''}" data-pick="${p.id}">${esc(p.title)}<small>${esc(p.nick)}</small></button>`).join('') || '<small>글이 없어요</small>';
+  }
+  $('#pPost').innerHTML = cur
+    ? `<h2>${esc(cur.title)}</h2><p>${esc(cur.body)}</p><small style="color:var(--mu)">✏️ ${esc(cur.nick)}</small>`
+    : `<div class="empty">${isT() ? '왼쪽에서 발표할 글을 눌러 주세요.' : '선생님이 글을 고르고 있어요. 잠시만 기다려 주세요.'}</div>`;
+  const word = room.cmode === 'word';
+  $('#cList').classList.toggle('hide', word);
+  $('#cloud').classList.toggle('hide', !word);
+  $('#cq').classList.toggle('hide', !word || !room.question);
+  $('#cq').textContent = '💬 ' + (room.question || '');
+  $('#cInput').placeholder = word ? '짧은 단어나 문장 (예: 부끄러움)' : '댓글을 입력하세요';
+  $('#cInput').disabled = $('#cSend').disabled = !cur;
+  if (!cur) { $('#cList').innerHTML = ''; $('#cloud').innerHTML = ''; return; }
+  if (!word) {
+    const cs = comments.filter(c => c.postId === cur.id).sort((a, b) => b.createdAt - a.createdAt);
+    $('#cList').innerHTML = cs.map(c => {
+      const likes = c.likes || [], on = likes.includes(uid);
+      return `<div class="cm"><b>${esc(c.nick)}</b><div>${esc(c.text)}</div><button class="lkbtn ${on ? 'on' : ''}" data-like="${c.id}">👍 ${likes.length}</button></div>`;
+    }).join('') || '<div class="empty" style="padding:30px 0">첫 댓글을 남겨 보세요.</div>';
+  } else renderCloud(cur.id);
+}
+
+/* ---------- 단어 묶기 (비슷한 표현 통일) ---------- */
+function norm(t) {
+  const raw = t.toLowerCase().replace(/[^가-힣a-z0-9]/g, '');
+  const s = raw.replace(/럽/g, '러')
+    .replace(/(스러움|스러운|스러워|스러웠다|스러다|스러)$/, '')
+    .replace(/(움|운|워|웠다|했다|하다|함|해|한|다|요|음)$/, '');
+  return s || raw;
+}
+function renderCloud(pid) {
+  const g = {};
+  words.filter(w => w.postId === pid).forEach(w => {
+    const k = norm(w.text); g[k] = g[k] || {n: 0, f: {}};
+    g[k].n++; g[k].f[w.text.trim()] = (g[k].f[w.text.trim()] || 0) + 1;
+  });
+  const colors = ['#e58aa6', '#c97bb2', '#f0a07a', '#8f9be0', '#7cc2b0', '#d9a441'];
+  $('#cloud').innerHTML = Object.values(g).sort((a, b) => b.n - a.n).map((x, i) => {
+    const label = Object.entries(x.f).sort((a, b) => (b[1] * 10 + (/(움|함|음)$/.test(b[0]) ? 1 : 0)) - (a[1] * 10 + (/(움|함|음)$/.test(a[0]) ? 1 : 0)))[0][0];
+    return `<span class="w" title="${x.n}명" style="font-size:${Math.min(18 + x.n * 10, 72)}px;color:${colors[i % colors.length]}">${esc(label)}</span>`;
+  }).join('') || '<div class="empty" style="padding:30px 0;width:100%">친구들의 응답을 기다리고 있어요.</div>';
+}
+
+/* ---------- 이벤트 ---------- */
+document.addEventListener('click', async e => {
+  const t = e.target.closest('button'); if (!t || !S) return;
+  const d = t.dataset;
+  if (d.more) { expanded.has(d.more) ? expanded.delete(d.more) : expanded.add(d.more); render(); }
+  if (d.edit) openEditor(posts.find(p => p.id === d.edit));
+  if (d.del && confirm('이 글을 삭제할까요?')) roomRef().collection('posts').doc(d.del).delete();
+  if (d.pick) roomRef().update({presentId: d.pick});
+  if (d.like) {
+    const c = comments.find(x => x.id === d.like), F = firebase.firestore.FieldValue;
+    roomRef().collection('comments').doc(d.like).update({likes: (c.likes || []).includes(uid) ? F.arrayRemove(uid) : F.arrayUnion(uid)});
+  }
+});
+$('#modeBtn').onclick = () => roomRef().update(room.mode === 'present' ? {mode: 'board', presentId: ''} : {mode: 'present'});
+$('#cmode').onchange = e => roomRef().update({cmode: e.target.value});
+$('#qInput').onchange = e => roomRef().update({question: e.target.value.trim()});
+async function sendC() {
+  const text = $('#cInput').value.trim(); if (!text || !room.presentId) return;
+  $('#cInput').value = '';
+  const base = {postId: room.presentId, nick: myName(), authorUid: uid, text, createdAt: Date.now()};
+  if (room.cmode === 'word') roomRef().collection('words').add(base);
+  else roomRef().collection('comments').add({...base, likes: []});
+}
+$('#cSend').onclick = sendC;
+$('#cInput').onkeydown = e => { if (e.key === 'Enter' && !e.isComposing) sendC(); };
+
+/* ---------- 글쓰기 / 수정 ---------- */
+$('#fab').onclick = () => openEditor(null);
+$('#mCancel').onclick = () => $('#modal').classList.add('hide');
+function openEditor(p) {
+  editingId = p ? p.id : null;
+  $('#mTitle').textContent = p ? '글 수정하기' : '글쓰기';
+  $('#mSave').textContent = p ? '수정 완료' : '올리기';
+  $('#eT').value = p ? p.title : ''; $('#eB').value = p ? p.body : '';
+  $('#eN').textContent = myName();
+  $('#modal').classList.remove('hide'); $('#eT').focus();
+}
+$('#mSave').onclick = async () => {
+  const title = $('#eT').value.trim(), body = $('#eB').value.trim();
+  if (!title || !body) return alert('제목과 내용을 모두 써 주세요.');
+  const col = roomRef().collection('posts'), now = Date.now();
+  try {
+    if (editingId) await col.doc(editingId).update({title, body, updatedAt: now});
+    else await col.add({title, body, nick: myName(), authorUid: uid, createdAt: now, updatedAt: now});
+    $('#modal').classList.add('hide');
+  } catch (err) { alert('저장하지 못했어요. 네트워크 상태를 확인해 주세요.'); }
+};
+
+/* 새로고침/튕김 후 자동 복귀 */
+if (ok && S) authReady.then(() => roomRef().get()).then(d => (d.exists && d.data().expiresAt > Date.now()) ? start() : leave());
+</script>
+</body>
+</html>
